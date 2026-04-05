@@ -99,7 +99,25 @@ def update_cache(breed_ids, cache_file):
         A string: "Cached data for {percentage}% of breeds",
         where percentage = (successful_new_adds / len(breed_ids)) * 100.
     """
-    pass
+    cache = load_json(cache_file)
+    new_additions = 0
+ 
+    for breed_id in breed_ids:
+        url = f"https://dogapi.dog/api/v2/breeds/{breed_id}"
+
+        if url in cache:
+            continue
+
+        result = search_breed(breed_id)
+        if result is not None:
+            parsed_json, request_url = result
+            cache[request_url] = parsed_json
+            new_additions += 1
+        
+    create_cache(cache, cache_file)
+ 
+    percentage = (new_additions / len(breed_ids)) * 100
+    return f"Cached data for {percentage}% of breeds"
 
 
 def get_longest_lifespan_breed(cache_file):
@@ -114,7 +132,34 @@ def get_longest_lifespan_breed(cache_file):
         A tuple (breed_name, max_lifespan_integer) for the winning breed, OR the
         string "No breeds found" if no breed in the cache has a life.max value.
     """
-    pass
+    cache = load_json(cache_file)
+ 
+    best_name = None
+    best_lifespan = None
+
+    for url, entry in cache.items():
+        try:
+            attributes = entry["data"]["attributes"]
+            name = attributes["name"]
+            max_life = attributes["life"]["max"]
+            if not isinstance(max_life, int):
+                continue
+            if best_lifespan is None:
+                best_name = name
+                best_lifespan = max_life
+            elif max_life > best_lifespan:
+                best_name = name
+                best_lifespan = max_life
+            elif max_life == best_lifespan:
+                if name < best_name:
+                    best_name = name
+
+        except (KeyError, TypeError):
+            continue 
+    if best_name is None:
+        return "No breeds found"
+    
+    return (best_name, best_lifespan)
 
 
 def get_groups_above_cutoff(cutoff, cache_file):
@@ -133,7 +178,20 @@ def get_groups_above_cutoff(cutoff, cache_file):
     RETURNS:
         A dictionary {group_uuid: count} for groups with count >= cutoff only.
     """
-    pass
+    cache = load_json(cache_file)
+    group_counts = {}
+
+    for url, entry in cache.items():
+        try:
+            group_data = entry["data"]["relationships"]["group"]["data"]
+            group_id = group_data.get("id")
+            if not group_id:
+                continue 
+            group_counts[group_id] = group_counts.get(group_id, 0) + 1
+        except (KeyError, TypeError):
+            continue 
+
+    return {gid: count for gid, count in group_counts.items() if count >= cutoff}
 
 
 # Extra Credit
